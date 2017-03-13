@@ -6,80 +6,116 @@
   #include <avr/power.h>
 #endif
 
-#define up_button         19
-#define right_button      20
-#define select_button     21
-#define left_button       22
-#define down_button       23
+#define BUTTON_PIN_DOWN     19
+#define BUTTON_PIN_UP       23
+#define BUTTON_PIN_SELECT   21
+#define BUTTON_PIN_LEFT     22
+#define BUTTON_PIN_RIGHT    20
 
-#define BACKLIGHT_PIN     4
-#define PALKA_LED_PIN     6
-#define NUMPIXELS         280
+#define SD_PIN_CHIP_SELECT  10
 
-#define KEY_NONE          0
-#define KEY_UP            1
-#define KEY_DOWN          2
-#define KEY_SELECT        3
-#define KEY_LEFT          4
-#define KEY_RIGHT         5
+#define LCD_PIN_A0          2
+#define LCD_PIN_RESET       3
+#define LCD_PIN_BACKLIGHT   4
+#define LCD_PIN_MOSI        7
+#define LCD_PIN_CHIP_SELECT 9
+#define LCD_PIN_SCK         14
 
-Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, PALKA_LED_PIN, NEO_GRB + NEO_KHZ800);
+#define LEDS_PIN_DATA       6  
+#define LEDS_NUMPIXELS      280
+
+#define KEY_STATE_NONE      0
+#define KEY_STATE_DOWN      1
+#define KEY_STATE_UP        2
+#define KEY_STATE_SELECT    3
+#define KEY_STATE_LEFT      4
+#define KEY_STATE_RIGHT     5
+
+
+Adafruit_NeoPixel pixels = Adafruit_NeoPixel(LEDS_NUMPIXELS, LEDS_PIN_DATA, NEO_GRB + NEO_KHZ800);
 File myFile;
-U8GLIB_PCD8544 u8g(14, 7, 9, 2, 3);  
+U8GLIB_PCD8544 u8g(LCD_PIN_SCK, LCD_PIN_MOSI, LCD_PIN_CHIP_SELECT, LCD_PIN_A0, LCD_PIN_RESET);  
+
 
 boolean menu_redraw_required = false;
-const int chipSelect = 10;
-uint8_t uiKeyCodeFirst = KEY_NONE;
-uint8_t uiKeyCodeSecond = KEY_NONE;
-uint8_t uiKeyCode = KEY_NONE;
+unsigned int error_code = 0;
+unsigned int filesNum = 0;
+unsigned int currentFileIndex = 0;
+char* files[12] = {};
 
-void uiStep(void) {
-  uiKeyCodeSecond = uiKeyCodeFirst;
-  if ( digitalRead(up_button) == LOW )
-    uiKeyCodeFirst = KEY_UP;
-  else if ( digitalRead(down_button) == LOW )
-    uiKeyCodeFirst = KEY_DOWN;
-  else if ( digitalRead(select_button) == LOW )
-    uiKeyCodeFirst = KEY_SELECT;
-  else if ( digitalRead(left_button) == LOW )
-    uiKeyCodeFirst = KEY_LEFT;
-  else if ( digitalRead(right_button) == LOW )
-    uiKeyCodeFirst = KEY_RIGHT;
+uint8_t keyCodeFirst = KEY_STATE_NONE;
+uint8_t keyCodeSecond = KEY_STATE_NONE;
+uint8_t keyCode = KEY_STATE_NONE;
+
+void initButtons(){
+  pinMode(BUTTON_PIN_UP, INPUT);
+  digitalWrite(BUTTON_PIN_UP, HIGH);
+
+  pinMode(BUTTON_PIN_RIGHT, INPUT);
+  digitalWrite(BUTTON_PIN_RIGHT, HIGH);
+
+  pinMode(BUTTON_PIN_SELECT, INPUT);
+  digitalWrite(BUTTON_PIN_SELECT, HIGH);
+
+  pinMode(BUTTON_PIN_LEFT, INPUT);
+  digitalWrite(BUTTON_PIN_LEFT, HIGH);
+
+  pinMode(BUTTON_PIN_DOWN, INPUT);
+  digitalWrite(BUTTON_PIN_DOWN, HIGH);
+}
+
+void readButtons(void) {
+  keyCodeSecond = keyCodeFirst;
+  if ( digitalRead(BUTTON_PIN_UP) == LOW )
+    keyCodeFirst = KEY_STATE_UP;
+  else if ( digitalRead(BUTTON_PIN_DOWN) == LOW )
+    keyCodeFirst = KEY_STATE_DOWN;
+  else if ( digitalRead(BUTTON_PIN_SELECT) == LOW )
+    keyCodeFirst = KEY_STATE_SELECT;
+  else if ( digitalRead(BUTTON_PIN_LEFT) == LOW )
+    keyCodeFirst = KEY_STATE_LEFT;
+  else if ( digitalRead(BUTTON_PIN_RIGHT) == LOW )
+    keyCodeFirst = KEY_STATE_RIGHT;
   else 
-    uiKeyCodeFirst = KEY_NONE;
+    keyCodeFirst = KEY_STATE_NONE;
  
-  if ( uiKeyCodeSecond == uiKeyCodeFirst )
-    uiKeyCode = uiKeyCodeFirst;
+  if ( keyCodeSecond == keyCodeFirst )
+    keyCode = keyCodeFirst;
   else
-    uiKeyCode = KEY_NONE;
+    keyCode = KEY_STATE_NONE;
   delay(10);
 }
 
-void init_palka(){
-  u8g.drawStr(15, 25, "Palka v0.0.1");  // put string of display at position X, Y  
+void initPalka(){
+  pixels.begin(); // This initializes the NeoPixel library.
 
-  for (int i=1; i <= NUMPIXELS; i++){
-    pixels.setPixelColor(i, pixels.Color(255,255,255));
+  for (int i=1; i <= LEDS_NUMPIXELS; i++){
+    pixels.setPixelColor(i, pixels.Color(128,128,128));
     pixels.show();
   }
-  for (int i=NUMPIXELS; i >= 0; i--){
-    pixels.setPixelColor(i, pixels.Color(255,255,255));
+  for (int i=LEDS_NUMPIXELS; i >= 0; i--){
+    pixels.setPixelColor(i, pixels.Color(128,128,128));
     pixels.setPixelColor(i+1, pixels.Color(0,0,0));
     pixels.show();
   }
 }
 
-void clean_palka(){
-  for (int i=0; i <= NUMPIXELS; i++){
+void cleanPalka(){
+  for (int i=0; i <= LEDS_NUMPIXELS; i++){
     pixels.setPixelColor(i, pixels.Color(0,0,0));
   }
   pixels.show();
 }
 
 void print_image(const char *filename){
-  myFile = SD.open(filename);
+  enum {BufSize=50}; // If a is short use a smaller number, eg 5 or 6 
+  char filePath[BufSize];
+  snprintf (filePath, BufSize, "/PROCES~1/%s", filename);
+  
+  myFile = SD.open(filePath);
   if (myFile) {
     unsigned int h_pixel = 0;
+    unsigned int w_line = 0;
 
     while (myFile.available()) {
       char A = myFile.read();
@@ -87,7 +123,7 @@ void print_image(const char *filename){
       int r=0;
       int g=0;
       int b=0;
-
+      
       switch (A){
         case '#':
           buf[0] = myFile.read();
@@ -110,78 +146,155 @@ void print_image(const char *filename){
           h_pixel=0;
           pixels.show();
           delay(1);
+          w_line++;
+
+          u8g.firstPage();
+          do  {
+            enum {BufSize=50}; // If a is short use a smaller number, eg 5 or 6 
+            char buf[BufSize];
+            snprintf (buf, BufSize, "Line: %d", w_line);
+            u8g.drawStr(2, 6, buf);
+          } while( u8g.nextPage() );
+    
+          Serial.println(w_line);
+          
           break;
       }
     }
     // close the file:
     myFile.close();
-    clean_palka();
+    cleanPalka();
   } else {
-    // if the file didn't open, print an error:
-    Serial.println("error opening print.txt");
+    Serial.println("error opening file");
   }  
 }
 
-void draw_dir() {
+void draw() {
+  enum {BufSize=50}; // If a is short use a smaller number, eg 5 or 6 
+  char buf[BufSize];
+  snprintf (buf, BufSize, "File: %s", files[currentFileIndex]);
+  u8g.drawStr(2, 6, buf);
+  u8g.drawHLine(0, 8, 100);
+
+  if(filesNum > 0){
+    int linesNum = filesNum;
+    int filesOffset = 0;
+    if (linesNum > 5) linesNum = 5;
+    if (currentFileIndex > linesNum - 2 && currentFileIndex + 2 < filesNum) filesOffset = currentFileIndex - linesNum + 2;
+    else if (currentFileIndex > linesNum - 1 && currentFileIndex + 1 < filesNum) filesOffset = currentFileIndex - linesNum + 1;
+
+    Serial.print(currentFileIndex);
+    Serial.print(" ");
+    Serial.print(linesNum);
+    Serial.print(" ");
+    Serial.print(filesOffset);
+    Serial.println();
+      
+    for(unsigned int line = filesOffset; line < (filesOffset + linesNum); line++){
+      int baseLine = 10 + (line - filesOffset + 1)*7;
+      if(currentFileIndex == line){
+        u8g.drawBox(0, baseLine - 6, 70, 7);
+        u8g.setColorIndex(0);
+      }
+      u8g.drawStr(2, baseLine, files[line]);
+      u8g.setColorIndex(1);
+    }
+  }
+}
+
+void printError(unsigned int error_code){
+  switch(error_code){
+    case 1:
+      u8g.drawStr(10, 25, "SD read error");  // put string of display at position X, Y
+      break;
+  }
+}
+
+void initSD(){
+  Serial.print("Initializing SD card...");  
+
+  if (!SD.begin(SD_PIN_CHIP_SELECT)) {
+    Serial.println("initialization failed!");
+    error_code = 1;
+    return;
+  }
+
   File dir;
-  dir = SD.open("/");
-  int line_num = 0;
+  dir = SD.open("/PROCES~1/");
 
   while (true) {
-
     File entry =  dir.openNextFile();
-    if (! entry) {
+    if (!entry) {
       break;
-    }
-
-    if (!entry.isDirectory()) {
-      u8g.drawStr(15, line_num+7, entry.name());
-      line_num+=7;
+    } else if (!entry.isDirectory()) {
+      files[filesNum] = strdup(entry.name());
+      filesNum++;
+      Serial.println(entry.name());
     }
     entry.close();
-  } 
+  }
+}
+
+void initScreen(){
+  analogWrite(LCD_PIN_BACKLIGHT, 0);
+  u8g.setFont(u8g_font_04b_03r);
+  u8g.firstPage();
+  do  {
+    u8g.drawStr(15, 15, "Palka v0.0.1");  // put string of display at position X, Y
+    if (error_code > 0){
+      printError(error_code);      
+    }
+  } while( u8g.nextPage() );
 }
 
 void setup()
 {
   Serial.begin(115200);
-  pixels.begin(); // This initializes the NeoPixel library.
-  analogWrite(BACKLIGHT_PIN, 0);
-  u8g.setFont(u8g_font_04b_03r);
-//  init_palka();
-  clean_palka();
-
-  pinMode(21, INPUT);
-  digitalWrite(21, HIGH);
-  
-  Serial.print("Initializing SD card...");
-
-  if (!SD.begin(chipSelect)) {
-    Serial.println("initialization failed!");
-    return;
-  }
-
-  draw_dir();
+  initSD();
+  initButtons();
+  cleanPalka();
+  initPalka();
+  cleanPalka();
+  initScreen();
+  delay(500);
+  menu_redraw_required = 1;
+  Serial.println("init done");
 }
 
 void loop()
-{
-  uiStep();                                     // check for key press
+{  
+  readButtons();                                     // check for key press
 
-  if (  menu_redraw_required != 0 ) {
+  if(keyCode != 0){
+    Serial.println(keyCode);
+    if(keyCode == KEY_STATE_DOWN && currentFileIndex < filesNum){
+      currentFileIndex++;
+      menu_redraw_required = 1;
+    }
+  
+    if(keyCode == KEY_STATE_UP && currentFileIndex > 0){
+      currentFileIndex--;
+      menu_redraw_required = 1;
+    }
+  }
+  
+  if (menu_redraw_required != 0) {
     u8g.firstPage();
     do  {
-      drawMenu();
+      draw();
     } while( u8g.nextPage() );
     menu_redraw_required = 0;
   }
   
-  if (digitalRead(21) == LOW){
-    print_image("print.txt");
-    clean_palka();
+  if (keyCode == KEY_STATE_SELECT){
+    print_image(files[currentFileIndex]);
+    cleanPalka();
   }
   
-//  updateMenu();                            // update menu bar
+  while(keyCode != 0){
+    readButtons();
+    cleanPalka();
+  }
 }
 
 
