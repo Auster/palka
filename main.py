@@ -32,7 +32,7 @@ def resize(image_name):
 
     print w, h
 
-    with open('{}/{}.palka'.format(processed_path, image), 'a') as the_file:
+    with open('{}/{}.palka'.format(processed_path, image), 'w') as the_file:
         print the_file
         for i in range(w):
           for j in range(h):
