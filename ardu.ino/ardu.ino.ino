@@ -46,6 +46,7 @@ char* files[12] = {};
 uint8_t keyCodeFirst = KEY_STATE_NONE;
 uint8_t keyCodeSecond = KEY_STATE_NONE;
 uint8_t keyCode = KEY_STATE_NONE;
+unsigned int delay_time = 1000;
 
 void initButtons(){
   pinMode(BUTTON_PIN_UP, INPUT);
@@ -93,6 +94,7 @@ void initPalka(){
     pixels.setPixelColor(i, pixels.Color(128,128,128));
     pixels.show();
   }
+
   for (int i=LEDS_NUMPIXELS; i >= 0; i--){
     pixels.setPixelColor(i, pixels.Color(128,128,128));
     pixels.setPixelColor(i+1, pixels.Color(0,0,0));
@@ -145,19 +147,19 @@ void print_image(const char *filename){
         case '\n':
           h_pixel=0;
           pixels.show();
-          delay(1);
+          delayMicroseconds(delay_time);
+
           w_line++;
 
-          u8g.firstPage();
-          do  {
-            enum {BufSize=50}; // If a is short use a smaller number, eg 5 or 6 
-            char buf[BufSize];
-            snprintf (buf, BufSize, "Line: %d", w_line);
-            u8g.drawStr(2, 6, buf);
-          } while( u8g.nextPage() );
-    
-          Serial.println(w_line);
-          
+          if((w_line % 100) == 0){
+            u8g.firstPage();
+            do  {
+              enum {BufSize=50}; // If a is short use a smaller number, eg 5 or 6 
+              char buf[BufSize];
+              snprintf (buf, BufSize, "Line: %d", w_line);
+              u8g.drawStr(2, 6, buf);
+            } while( u8g.nextPage() );
+          }
           break;
       }
     }
@@ -165,7 +167,6 @@ void print_image(const char *filename){
     myFile.close();
     cleanPalka();
   } else {
-    Serial.println("error opening file");
   }  
 }
 
@@ -174,6 +175,10 @@ void draw() {
   char buf[BufSize];
   snprintf (buf, BufSize, "File: %s", files[currentFileIndex]);
   u8g.drawStr(2, 6, buf);
+
+  snprintf (buf, BufSize, "Sp: %d", delay_time);
+  u8g.drawStr(2, 30, buf);
+
   u8g.drawHLine(0, 8, 100);
 
   if(filesNum > 0){
@@ -182,13 +187,6 @@ void draw() {
     if (linesNum > 5) linesNum = 5;
     if (currentFileIndex > linesNum - 2 && currentFileIndex + 2 < filesNum) filesOffset = currentFileIndex - linesNum + 2;
     else if (currentFileIndex > linesNum - 1 && currentFileIndex + 1 < filesNum) filesOffset = currentFileIndex - linesNum + 1;
-
-    Serial.print(currentFileIndex);
-    Serial.print(" ");
-    Serial.print(linesNum);
-    Serial.print(" ");
-    Serial.print(filesOffset);
-    Serial.println();
       
     for(unsigned int line = filesOffset; line < (filesOffset + linesNum); line++){
       int baseLine = 10 + (line - filesOffset + 1)*7;
@@ -211,10 +209,7 @@ void printError(unsigned int error_code){
 }
 
 void initSD(){
-  Serial.print("Initializing SD card...");  
-
   if (!SD.begin(SD_PIN_CHIP_SELECT)) {
-    Serial.println("initialization failed!");
     error_code = 1;
     return;
   }
@@ -229,7 +224,6 @@ void initSD(){
     } else if (!entry.isDirectory()) {
       files[filesNum] = strdup(entry.name());
       filesNum++;
-      Serial.println(entry.name());
     }
     entry.close();
   }
@@ -249,7 +243,6 @@ void initScreen(){
 
 void setup()
 {
-  Serial.begin(115200);
   initSD();
   initButtons();
   cleanPalka();
@@ -258,7 +251,6 @@ void setup()
   initScreen();
   delay(500);
   menu_redraw_required = 1;
-  Serial.println("init done");
 }
 
 void loop()
@@ -266,7 +258,6 @@ void loop()
   readButtons();                                     // check for key press
 
   if(keyCode != 0){
-    Serial.println(keyCode);
     if(keyCode == KEY_STATE_DOWN && currentFileIndex < filesNum){
       currentFileIndex++;
       menu_redraw_required = 1;
@@ -275,6 +266,20 @@ void loop()
     if(keyCode == KEY_STATE_UP && currentFileIndex > 0){
       currentFileIndex--;
       menu_redraw_required = 1;
+    }
+    
+    if(keyCode == KEY_STATE_LEFT){
+      if(delay_time>100){
+        delay_time = delay_time - 100;
+        menu_redraw_required = 1;
+      }
+    }
+    
+    if(keyCode == KEY_STATE_RIGHT){
+      if(delay_time<2000){
+        delay_time = delay_time + 100;
+        menu_redraw_required = 1;
+      }
     }
   }
   
