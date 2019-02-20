@@ -1,4 +1,5 @@
 import os
+
 from PIL import Image
 
 palka_h = 267
@@ -34,9 +35,9 @@ def resize(image_name):
       im = im.resize((new_w, new_h), Image.NEAREST)
       print("New size {}, {}".format(new_w, new_h))
 
+    pix = im.load()
     w=im.size[0]
     h=im.size[1]
-    pix = im.load()
 
     # Save new image in 'palka' format
     palka_file = '{}/{}.palka'.format(processed_path, image)
@@ -49,7 +50,7 @@ def resize(image_name):
           except:
             r, g, b = pix[i,j]
           the_file.write('#%02x%02x%02x' % (r, g, b))
-          the_file.write('\n')
+        the_file.write('\n')
 
 if __name__ == '__main__':
     for image in images:
