@@ -31,6 +31,9 @@
 #define KEY_STATE_LEFT      4
 #define KEY_STATE_RIGHT     5
 
+#define MIN_OUTPUT_INTERVAL 0
+#define MAX_OUTPUT_INTERVAL 10000
+#define DEF_OUTPUT_INTERVAL 1000
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(LEDS_NUMPIXELS, LEDS_PIN_DATA, NEO_GRB + NEO_KHZ800);
 File myFile;
@@ -46,7 +49,7 @@ char* files[12] = {};
 uint8_t keyCodeFirst = KEY_STATE_NONE;
 uint8_t keyCodeSecond = KEY_STATE_NONE;
 uint8_t keyCode = KEY_STATE_NONE;
-unsigned int delay_time = 1000;
+unsigned int delay_time = DEF_OUTPUT_INTERVAL;
 
 void initButtons(){
   pinMode(BUTTON_PIN_UP, INPUT);
@@ -269,14 +272,14 @@ void loop()
     }
     
     if(keyCode == KEY_STATE_LEFT){
-      if(delay_time>100){
+      if(delay_time > MIN_OUTPUT_INTERVAL){
         delay_time = delay_time - 100;
         menu_redraw_required = 1;
       }
     }
     
     if(keyCode == KEY_STATE_RIGHT){
-      if(delay_time<2000){
+      if(delay_time < MAX_OUTPUT_INTERVAL){
         delay_time = delay_time + 100;
         menu_redraw_required = 1;
       }
