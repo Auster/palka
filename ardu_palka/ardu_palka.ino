@@ -113,6 +113,7 @@ void cleanPalka(){
 }
 
 void print_image(const char *filename){
+  disable_backlight();
   enum {BufSize=50}; // If a is short use a smaller number, eg 5 or 6 
   char filePath[BufSize];
   snprintf (filePath, BufSize, "/PROCES~1/%s", filename);
@@ -170,7 +171,8 @@ void print_image(const char *filename){
     myFile.close();
     cleanPalka();
   } else {
-  }  
+  }
+  enable_backlight(); 
 }
 
 void draw() {
@@ -232,8 +234,16 @@ void initSD(){
   }
 }
 
-void initScreen(){
+void enable_backlight(){
   analogWrite(LCD_PIN_BACKLIGHT, 0);
+}
+
+void disable_backlight(){
+  analogWrite(LCD_PIN_BACKLIGHT, 1);
+}
+
+void initScreen(){
+  enable_backlight();
   u8g.setFont(u8g_font_04b_03r);
   u8g.firstPage();
   do  {
