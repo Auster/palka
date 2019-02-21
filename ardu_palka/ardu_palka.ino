@@ -2,6 +2,7 @@
 #include <SPI.h>
 #include <Adafruit_NeoPixel.h>
 #include "U8glib.h"
+
 #ifdef __AVR__
   #include <avr/power.h>
 #endif
@@ -21,7 +22,7 @@
 #define LCD_PIN_CHIP_SELECT 9
 #define LCD_PIN_SCK         14
 
-#define LEDS_PIN_DATA       6  
+#define LEDS_PIN_DATA       6
 #define LEDS_NUMPIXELS      280
 
 #define KEY_STATE_NONE      0
@@ -31,12 +32,13 @@
 #define KEY_STATE_LEFT      4
 #define KEY_STATE_RIGHT     5
 
-#define MIN_OUTPUT_INTERVAL 0
-#define MAX_OUTPUT_INTERVAL 10000
-#define DEF_OUTPUT_INTERVAL 1000
+#define MIN_OUTPUT_INTERVAL 0      // Microseconds
+#define MAX_OUTPUT_INTERVAL 10000  // Microseconds
+#define DEF_OUTPUT_INTERVAL 1000   // Microseconds
+
+#define PRE_PRINT_DELAY     0      // Delay before print (miliseconds)
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(LEDS_NUMPIXELS, LEDS_PIN_DATA, NEO_GRB + NEO_KHZ800);
-File myFile;
 U8GLIB_PCD8544 u8g(LCD_PIN_SCK, LCD_PIN_MOSI, LCD_PIN_CHIP_SELECT, LCD_PIN_A0, LCD_PIN_RESET);  
 
 
@@ -113,18 +115,20 @@ void cleanPalka(){
 }
 
 void print_image(const char *filename){
+  File printFile;
   disable_backlight();
   enum {BufSize=50}; // If a is short use a smaller number, eg 5 or 6 
   char filePath[BufSize];
   snprintf (filePath, BufSize, "/PROCES~1/%s", filename);
-  
-  myFile = SD.open(filePath);
-  if (myFile) {
+
+  printFile = SD.open(filePath);
+  if (printFile) {
+    delay(PRE_PRINT_DELAY);
     unsigned int h_pixel = 0;
     unsigned int w_line = 0;
 
-    while (myFile.available()) {
-      char A = myFile.read();
+    while (printFile.available()) {
+      char A = printFile.read();
       char buf[2];
       int r=0;
       int g=0;
@@ -132,16 +136,16 @@ void print_image(const char *filename){
       
       switch (A){
         case '#':
-          buf[0] = myFile.read();
-          buf[1] = myFile.read();
+          buf[0] = printFile.read();
+          buf[1] = printFile.read();
           r = (int)strtol(buf, NULL, 16);
 
-          buf[0] = myFile.read();
-          buf[1] = myFile.read();
+          buf[0] = printFile.read();
+          buf[1] = printFile.read();
           g = (int)strtol(buf, NULL, 16);
 
-          buf[0] = myFile.read();
-          buf[1] = myFile.read();
+          buf[0] = printFile.read();
+          buf[1] = printFile.read();
           b = (int)strtol(buf, NULL, 16);
 
           pixels.setPixelColor(h_pixel, pixels.Color(r,g,b));
@@ -167,8 +171,9 @@ void print_image(const char *filename){
           break;
       }
     }
+
     // close the file:
-    myFile.close();
+    printFile.close();
     cleanPalka();
   } else {
   }
